@@ -222,110 +222,111 @@ def printOutlierMatrices(matrices, alphas=[0.1, 0.05, 0.01, 0.005, 0.001,
         print(matrix)
         print("\n")
 
-# Import graph and prepare to run chain:
+if __name__ == '__main__':
+    # Import graph and prepare to run chain:
 
-graph = Graph.from_file("./Data/Wisconsin/WI_ltsb_corrected_final.shp")
+        graph = Graph.from_file("./Data/Wisconsin/WI_ltsb_corrected_final.shp")
 
-islands = graph.islands
-components = list(connected_components(graph))
-df = gpd.read_file("./Data/Wisconsin/WI_ltsb_corrected_final.shp")
-df.to_crs({"init": "epsg:26986"}, inplace=True)
-
-
-biggest_component_size = max(len(c) for c in components)
-problem_components = [c for c in components if len(c) != biggest_component_size]
-problem_nodes = [node for component in problem_components for node in component]
-problem_geoids = [graph.nodes[node]["GEOID10"] for node in problem_nodes]
-
-largest_component_size = max(len(c) for c in components)
-to_delete = [c for c in components if len(c) != largest_component_size]
-for c in to_delete:
-    for node in c:
-        graph.remove_node(node)
+    islands = graph.islands
+    components = list(connected_components(graph))
+    df = gpd.read_file("./Data/Wisconsin/WI_ltsb_corrected_final.shp")
+    df.to_crs({"init": "epsg:26986"}, inplace=True)
 
 
-election = Election("PRETOT16", {"Dem": "PREDEM16", "Rep": "PREREP16"})
+    biggest_component_size = max(len(c) for c in components)
+    problem_components = [c for c in components if len(c) != biggest_component_size]
+    problem_nodes = [node for component in problem_components for node in component]
+    problem_geoids = [graph.nodes[node]["GEOID10"] for node in problem_nodes]
 
-#Create initial parition based on congressional districts
-initial_partition = Partition(
-    graph,
-    assignment="CON",
-    updaters={
-        "cut_edges": cut_edges,
-        "population": Tally("PERSONS", alias="population"),
-        "PRETOT16": election
-    }
-)
-
-# Example set of NoInitialChains to run:
-
-pop_constraint = constraints.within_percent_of_ideal_population(initial_partition, 0.06)
-compactness_bound = constraints.UpperBound(
-    lambda p: len(p["cut_edges"]),
-    2*len(initial_partition["cut_edges"])
-)
-
-chainFlipAlwaysShort = NoInitialChain(
-    proposal=propose_random_flip,
-    constraints=[single_flip_contiguous,
-                 pop_constraint,
-                 compactness_bound],
-    accept=always_accept,
-    total_steps=75000
-)
-
-chainFlipAlwaysLong = NoInitialChain(
-    proposal=propose_random_flip,
-    constraints=[single_flip_contiguous,
-                 pop_constraint,
-                 compactness_bound],
-    accept=always_accept,
-    total_steps=500000
-)
-
-my_updaters = {"population": Tally("PERSONS", alias="population"), "PRETOT16": election}
-ideal_population = sum(initial_partition["population"].values()) / len(initial_partition)
-
-# We use functools.partial to bind the extra parameters (pop_col, pop_target, epsilon, node_repeats)
-# of the recom proposal.
-proposal = partial(recom,
-                   pop_col="PERSONS",
-                   pop_target=ideal_population,
-                   epsilon=0.06,
-                   node_repeats=2
-                  )
+    largest_component_size = max(len(c) for c in components)
+    to_delete = [c for c in components if len(c) != largest_component_size]
+    for c in to_delete:
+        for node in c:
+            graph.remove_node(node)
 
 
-chainRecomShort = NoInitialChain(
-    proposal=proposal,
-    constraints=[
-        pop_constraint,
-        compactness_bound,
-        contiguous
-    ],
-    accept=accept.always_accept,
-    total_steps=50000
-)
+    election = Election("PRETOT16", {"Dem": "PREDEM16", "Rep": "PREREP16"})
 
-chainRecomLong = NoInitialChain(
-    proposal=proposal,
-    constraints=[
-        pop_constraint,
-        compactness_bound,
-        contiguous
-    ],
-    accept=accept.always_accept,
-    total_steps=75000
-)
+    #Create initial parition based on congressional districts
+    initial_partition = Partition(
+        graph,
+        assignment="CON",
+        updaters={
+            "cut_edges": cut_edges,
+            "population": Tally("PERSONS", alias="population"),
+            "PRETOT16": election
+            }
+        )
 
-testChains = [chainFlipAlwaysShort, chainFlipAlwaysLong, chainRecomShort, chainRecomLong]
-testAlphas=[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
-initial_partitions = getGerryPlans(75, 0.15)
-print("Number of starting partitions:", len(initial_partitions))
-distsMatrix = distsMatrix(chains=testChains, initial_states=initial_partitions,
-                          electionName="PRETOT16", electionStatistic="wonDem")
-matrix = outlierMatrix(distsMatrix, alphas=testAlphas)
-printOutlierMatrices(matrix, testAlphas)
+    # Example set of NoInitialChains to run:
+
+        pop_constraint = constraints.within_percent_of_ideal_population(initial_partition, 0.06)
+        compactness_bound = constraints.UpperBound(
+            lambda p: len(p["cut_edges"]),
+            2*len(initial_partition["cut_edges"])
+            )
+
+    chainFlipAlwaysShort = NoInitialChain(
+        proposal=propose_random_flip,
+        constraints=[single_flip_contiguous,
+                     pop_constraint,
+                     compactness_bound],
+        accept=always_accept,
+        total_steps=75000
+        )
+
+    chainFlipAlwaysLong = NoInitialChain(
+        proposal=propose_random_flip,
+        constraints=[single_flip_contiguous,
+                     pop_constraint,
+                     compactness_bound],
+        accept=always_accept,
+        total_steps=500000
+        )
+
+    my_updaters = {"population": Tally("PERSONS", alias="population"), "PRETOT16": election}
+    ideal_population = sum(initial_partition["population"].values()) / len(initial_partition)
+
+    # We use functools.partial to bind the extra parameters (pop_col, pop_target, epsilon, node_repeats)
+    # of the recom proposal.
+    proposal = partial(recom,
+                       pop_col="PERSONS",
+                       pop_target=ideal_population,
+                       epsilon=0.06,
+                       node_repeats=2
+                       )
+
+
+    chainRecomShort = NoInitialChain(
+        proposal=proposal,
+        constraints=[
+            pop_constraint,
+            compactness_bound,
+            contiguous
+            ],
+        accept=accept.always_accept,
+        total_steps=50000
+        )
+
+    chainRecomLong = NoInitialChain(
+        proposal=proposal,
+        constraints=[
+            pop_constraint,
+            compactness_bound,
+            contiguous
+            ],
+        accept=accept.always_accept,
+        total_steps=75000
+        )
+
+    testChains = [chainFlipAlwaysShort, chainFlipAlwaysLong, chainRecomShort, chainRecomLong]
+    testAlphas=[0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001]
+    initial_partitions = getGerryPlans(75, 0.15)
+    print("Number of starting partitions:", len(initial_partitions))
+    distsMatrix = distsMatrix(chains=testChains, initial_states=initial_partitions,
+                              electionName="PRETOT16", electionStatistic="wonDem")
+    matrix = outlierMatrix(distsMatrix, alphas=testAlphas)
+    printOutlierMatrices(matrix, testAlphas)
 
 
 
